@@ -4,8 +4,4 @@ module.exports = function(app) {
 	app.get('/api/test', user.test);
 	app.get('/api/user/:game/:username', user.getUserInfo);
 	app.get('/api/heros/:game/:hero/:id', hero.getUserData);
-	app.get('/auth/bnet/callback', function(req, res){
-		console.log(req);
-		res.end();
-	})
 }
