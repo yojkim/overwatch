@@ -1,0 +1,54 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8"> 
+		<title>badwatch</title>
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+		<script type="text/javascript">
+		$(document).ready(function(){
+			$('#getUser').click(function(){
+				var user = $('#user').val();
+				if( !user ) 
+				{
+					alert('유저정보를 입력해주세요.');
+					return;
+				}
+
+				$.ajax({
+					type: "GET",
+					url: "./api/user/quick/" + user,
+					dataType: "json",
+					success: function(data){
+						if( data.responseCode == 2 )
+						{
+							$('#result').text("");
+							for(var i=0; i<Object.keys(data.userData).length; i++)
+							{
+								$('#result').append("<p>" + Object.keys(data.userData)[i] + " = " + data.userData[Object.keys(data.userData)[i]] + "</p>");
+							}
+						}
+						else 
+						{
+
+						}
+						
+					},
+					error: function(err){
+						console.log(err);
+					}
+				})
+			
+			});
+		});
+		</script>
+	</head>
+	<body>
+		<h2>본인의 아이디와 배틀태그를 입력하세요.</h2>
+		<h5>ex) 홍대자퇴생-3569</h5>
+		<input id="user" size="30" placeholder="홍대자퇴생-3569">
+		<button id="getUser">정보보기</button>
+
+		<br>
+		<div id="result"></div>
+	</body>
+</html>	
