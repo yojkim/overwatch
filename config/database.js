@@ -1,9 +1,10 @@
 var mysql = require('mysql');
 var connection = mysql.createConnection({
-	host	: 'overwatch.c57b1kph8gqz.ap-northeast-2.rds.amazonaws.com',
+	host	:  process.env.MYSQL_HOST,
 	user 	:  process.env.MYSQL_ID,
 	password:  process.env.MYSQL_PASSWORD,
-	database: 'overwatch'
+	database: 'overwatch',
+	multipleStatements: true
 });
 
 connection.connect(function(err){

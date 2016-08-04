@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+
+  <title>BadWatch</title>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/0.14.0/react.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/0.14.0/react-dom.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-core/5.8.23/browser.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+</head>
+<body>
+
+  <div id="content"></div>
+
+  <script type="text/babel">
+  
+
+	var List = React.createClass({
+
+
+  	render: function() {
+    return (
+      <div className="commentBox">
+        <h1>본인의 아이디와 배틀태그를 입력하세요.</h1>
+        <InputForm />
+      </div>
+    );
+  }
+
+
+  });
+
+
+
+
+var InputForm = React.createClass({
+
+	getInitialState: function() {
+    return {data: []};
+ 	 },
+
+
+	search: function(e){
+    e.preventDefault();
+
+    var user = this.refs.id.value;
+
+    $.ajax({
+      url: './api/userInfo/quick/' + user,
+      dataType: 'json',
+      cache: false,
+      success: function(data) {
+      	
+        this.setState({data: data.userData});
+ 
+      }.bind(this),
+      error: function(xhr, status, err) {
+        console.error(this.props.url, status, err.toString());
+      }.bind(this)
+    });
+  },
+	
+
+  render: function() {
+
+    return (
+
+      <div className="inputForm"> 
+
+    	  <form className="inputForm" onSubmit={this.search}>
+          <input type="text" placeholder="Your id" ref="id"/>
+          <input type="submit" value="검색" />
+          </form>
+
+          <h5>ex) 홍대자퇴생-3569</h5>
+
+         <ResultList data = {this.state.data} />
+
+      </div>
+    );
+  }
+});
+
+
+var ResultList = React.createClass({
+
+   render: function() {
+    var pairs = [];
+      for(var key in this.props.data){
+        pairs.push(<p>{key} : {this.props.data[key]}</p>);
+      }
+    return (
+           <div className="resultList">{pairs}</div>
+    );
+  }
+  });
+
+
+  ReactDOM.render(
+    <List data />,
+    document.getElementById('content')
+  );
+  </script>
+
+</body>
+</html>

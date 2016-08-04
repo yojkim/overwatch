@@ -1,6 +1,6 @@
 var connection = require('../config/database.js');
 var responseCode = require('../models/responseCode.js');
-
+var fs = require('fs');
 exports.getUserInfo = function(req, res) {
 	/*---------------------- Quick / Rank  -----------------------*/
 	if(req.params.game == "quick") {
@@ -25,8 +25,6 @@ exports.getUserInfo = function(req, res) {
 		var battletag = name[1];
 			name = name[0];	
 	}
-	console.log(connection.escape(name));
-	console.log(connection.escape(battletag));
 	connection.query('SELECT 1 FROM users WHERE EXISTS (SELECT 1 FROM users WHERE name=? and battletag=?) LIMIT 1;', [ name, battletag ],function(err, data){
 		if(data.length) {
 			if(is_rank) {
@@ -42,8 +40,8 @@ exports.getUserInfo = function(req, res) {
 		   		})
 			}
 		}
-		else {
-			console.log("PARSEING START");
+		else { /*------------------------------유저가 없음 ------------------------------*/
+			console.log("PARSING START");
 			/*------------  파싱 시작   --------------*/
 			var quick_key = require('../models/quick_key.js');
 			var rank_key = require('../models/rank_key.js');
@@ -70,7 +68,7 @@ exports.getUserInfo = function(req, res) {
 						return Number((parseFloat(str)/60).toFixed(3));
 					}
 					else {
-						return parseFloat(str);
+						return isNaN(parseFloat(str))? 0: parseFloat(str);
 					}
 				};
 				var $ = cheerio.load(html);
@@ -80,6 +78,7 @@ exports.getUserInfo = function(req, res) {
 				/*------------------유저가 존재하지 않음 -------------------- */
 				if( quick_jobs.length == 0 )
 				{
+					console.log("user not found");
 					res.json({ "responseCode": responseCode.GET_USERINFO_FAIL });
 					return;
 				}
@@ -87,7 +86,7 @@ exports.getUserInfo = function(req, res) {
 				for(i=0; i<quick_jobs.length; i++) {
 					switch(quick_jobs[i].children[0].data) {
 						case "모든 영웅": 
-							user_data["all"] = {};
+							user_data["users"] = {};
 							break;
 						case "리퍼": 
 							user_data["reaper"] = {};
@@ -152,9 +151,12 @@ exports.getUserInfo = function(req, res) {
 						case "메이": 
 							user_data["mei"] = {};
 							break;
+						case "아나":
+							user_data["ana"] = {};
+							break;
 					}
 				}
-				var battle = $('#quick-play .career-stats-section > .row > .row .js-stats')
+				var battle = $('#quick-play .career-stats-section > .row > .js-stats')
 				/* 
 					i
 					select option 개수만큼 for문 
@@ -200,7 +202,7 @@ exports.getUserInfo = function(req, res) {
 				for(i=0; i<rank_jobs.length; i++) {
 					switch(rank_jobs[i].children[0].data) {
 						case "모든 영웅": 
-							rank_data["all"] = {};
+							rank_data["users"] = {};
 							break;
 						case "리퍼": 
 							rank_data["reaper"] = {};
@@ -265,9 +267,12 @@ exports.getUserInfo = function(req, res) {
 						case "메이": 
 							rank_data["mei"] = {};
 							break;
+						case "아나":
+							rank_data["ana"] = {};
+							break;
 					}
 				}
-				var battle = $('#competitive-play .career-stats-section > .row > .row .js-stats')
+				var battle = $('#competitive-play .career-stats-section > .row > .js-stats')
 				/* 
 					i
 					select option 개수만큼 for문 
@@ -306,7 +311,7 @@ exports.getUserInfo = function(req, res) {
 						}
 					}
 				}
-				
+				var overwatch_id = Number($('script')[10].children[0].data.match(/\d/g).join(""));
 				for(i=1; i<Object.keys(game_data).length; i++) {
 					var champion = Object.keys(game_data)[i];
 					var quick_kill = game_data[Object.keys(game_data)[i]]["quick_kill"];
@@ -320,58 +325,142 @@ exports.getUserInfo = function(req, res) {
 					var rank_game_count = game_data[Object.keys(game_data)[i]]["rank_game_count"];
 					var rank_playtime = game_data[Object.keys(game_data)[i]]["rank_playtime"];
 					if( quick_kill ) 
-						game_data.all["quick_" + champion + "_kill"] = quick_kill;
+						game_data.users["quick_" + champion + "_kill"] = quick_kill;
 					if( quick_death ) 
-						game_data.all["quick_" + champion + "_death"] = quick_death;
+						game_data.users["quick_" + champion + "_death"] = quick_death;
 					if( quick_win ) 
-						game_data.all["quick_" + champion + "_win"] = quick_win;
+						game_data.users["quick_" + champion + "_win"] = quick_win;
 					if( quick_game_count ) 
-						game_data.all["quick_" + champion + "_game_count"] = quick_game_count;
+						game_data.users["quick_" + champion + "_game_count"] = quick_game_count;
 					if( quick_playtime ) 
-						game_data.all["quick_" + champion + "_playtime"] = quick_playtime;
+						game_data.users["quick_" + champion + "_playtime"] = quick_playtime;
 					if( rank_kill ) 
-						game_data.all["rank_" + champion + "_kill"] = rank_kill;
+						game_data.users["rank_" + champion + "_kill"] = rank_kill;
 					if( rank_death ) 
-						game_data.all["rank_" + champion + "_death"] = rank_death;
+						game_data.users["rank_" + champion + "_death"] = rank_death;
 					if( rank_win ) 
-						game_data.all["rank_" + champion + "_win"] = rank_win;
+						game_data.users["rank_" + champion + "_win"] = rank_win;
 					if( rank_game_count ) 
-						game_data.all["rank_" + champion + "_game_count"] = rank_game_count;
+						game_data.users["rank_" + champion + "_game_count"] = rank_game_count;
 					if( rank_playtime ) 
-						game_data.all["rank_" + champion + "_playtime"] = rank_playtime;
+						game_data.users["rank_" + champion + "_playtime"] = rank_playtime;
+
+					game_data[Object.keys(game_data)[i]]["overwatch_id"] = overwatch_id;
 				}
 
 				var level_div = $('#overview-section .column .masthead-player-progression .u-vertical-center');
-				game_data.all["level"] = parseInt(level_div[0].children[0].data);
-				var overwatch_id = Number($('script')[10].children[0].data.match(/\d/g).join(""));
-				game_data.all["overwatch_id"] = overwatch_id;
-				game_data.all["name"] = name;
-				game_data.all["battletag"] = battletag;
-				connection.query('INSERT INTO users SET ?', game_data.all, function(err, result){
-					if(!err) {
-						if(is_rank) {
-							connection.query('SELECT user_id, name, battletag, level, rank_melee_lastshot, rank_solo_kill, rank_mission_kill, rank_lastshot, rank_deal, rank_kill, rank_environment_kill, rank_onecombo, rank_heal, rank_view_support, rank_destroy_teleport, rank_most_kill, rank_most_lastshot, rank_most_deal, rank_most_heal, rank_best_defence_support, rank_best_attack_support, rank_most_mission_kill, rank_most_mission_time, rank_most_onecombo, rank_most_solo_kill, rank_most_flood_time, rank_death, rank_environment_death, rank_card, rank_gold_medal, rank_silver_medal, rank_bronze_medal, rank_win, rank_game_count, rank_flood_time, rank_mission_time, rank_playtime, rank_most_melee_lastshot, rank_defence_support, rank_attack_support, rank_reaper_kill, rank_reaper_death, rank_reaper_win, rank_reaper_game_count, rank_reaper_playtime, rank_tracer_kill, rank_tracer_death, rank_tracer_win, rank_tracer_game_count, rank_tracer_playtime, rank_mercy_kill, rank_mercy_death, rank_mercy_win, rank_mercy_game_count, rank_mercy_playtime, rank_hanzo_kill,rank_hanzo_death,rank_hanzo_win,rank_hanzo_game_count,rank_hanzo_playtime,rank_torbjon_kill, rank_torbjon_death, rank_torbjon_win, rank_torbjon_game_count, rank_torbjon_playtime, rank_reinhardt_kill, rank_reinhardt_death, rank_reinhardt_win, rank_reinhardt_game_count, rank_reinhardt_playtime, rank_pharah_kill, rank_pharah_death, rank_pharah_win, rank_pharah_game_count, rank_pharah_playtime, rank_winston_kill, rank_winston_death, rank_winston_win, rank_winston_game_count, rank_winston_playtime, rank_widowmaker_kill, rank_widowmaker_death, rank_widowmaker_win, rank_widowmaker_game_count, rank_widowmaker_playtime, rank_bastion_kill, rank_bastion_death, rank_bastion_win, rank_bastion_game_count, rank_bastion_playtime, rank_symmetra_kill, rank_symmetra_death, rank_symmetra_win, rank_symmetra_game_count, rank_symmetra_playtime, rank_zenyatta_kill, rank_zenyatta_death, rank_zenyatta_win, rank_zenyatta_game_count, rank_zenyatta_playtime, rank_genji_kill, rank_genji_death, rank_genji_win, rank_genji_game_count, rank_genji_playtime, rank_roadhog_kill, rank_roadhog_death, rank_roadhog_win, rank_roadhog_game_count, rank_roadhog_playtime, rank_mccree_kill, rank_mccree_death, rank_mccree_win, rank_mccree_game_count, rank_mccree_playtime, rank_junkrat_kill, rank_junkrat_death, rank_junkrat_win, rank_junkrat_game_count, rank_junkrat_playtime, rank_zarya_kill, rank_zarya_death, rank_zarya_win, rank_zarya_game_count, rank_zarya_playtime, rank_soldier_kill, rank_soldier_death, rank_soldier_win, rank_soldier_game_count, rank_soldier_playtime, rank_lucio_kill, rank_lucio_death, rank_lucio_win, rank_lucio_game_count, rank_lucio_playtime, rank_dva_kill, rank_dva_death, rank_dva_win, rank_dva_game_count, rank_dva_playtime, rank_mei_kill, rank_mei_death, rank_mei_win, rank_mei_game_count, rank_mei_playtime, rank_ana_kill, rank_ana_death, rank_ana_win, rank_ana_game_count, rank_ana_playtime FROM users WHERE name=? and battletag=? LIMIT 1;', [ name, battletag ], function(err, data, field){
-					   			res.json({ "responseCode": responseCode.GET_USERINFO_SUCCESS, "userData": data[0] });
-					   			return;
-					   		})
-						}
-						else {
-							connection.query('SELECT user_id, name, battletag, level, quick_melee_lastshot, quick_solo_kill, quick_mission_kill, quick_lastshot, quick_deal, quick_kill, quick_environment_kill, quick_onecombo, quick_heal, quick_view_support, quick_destroy_teleport, quick_most_kill, quick_most_lastshot, quick_most_deal, quick_most_heal, quick_best_defence_support, quick_best_attack_support, quick_most_mission_kill, quick_most_mission_time, quick_most_onecombo, quick_most_solo_kill, quick_most_flood_time, quick_death, quick_environment_death, quick_card, quick_gold_medal, quick_silver_medal, quick_bronze_medal, quick_win, quick_game_count, quick_flood_time, quick_mission_time, quick_playtime, quick_most_melee_lastshot, quick_defence_support, quick_attack_support, quick_reaper_kill, quick_reaper_death, quick_reaper_win, quick_reaper_game_count, quick_reaper_playtime, quick_tracer_kill, quick_tracer_death, quick_tracer_win, quick_tracer_game_count, quick_tracer_playtime, quick_mercy_kill, quick_mercy_death, quick_mercy_win, quick_mercy_game_count, quick_mercy_playtime, quick_hanzo_kill,quick_hanzo_death,quick_hanzo_win,quick_hanzo_game_count,quick_hanzo_playtime,quick_torbjon_kill, quick_torbjon_death, quick_torbjon_win, quick_torbjon_game_count, quick_torbjon_playtime, quick_reinhardt_kill, quick_reinhardt_death, quick_reinhardt_win, quick_reinhardt_game_count, quick_reinhardt_playtime, quick_pharah_kill, quick_pharah_death, quick_pharah_win, quick_pharah_game_count, quick_pharah_playtime, quick_winston_kill, quick_winston_death, quick_winston_win, quick_winston_game_count, quick_winston_playtime, quick_widowmaker_kill, quick_widowmaker_death, quick_widowmaker_win, quick_widowmaker_game_count, quick_widowmaker_playtime, quick_bastion_kill, quick_bastion_death, quick_bastion_win, quick_bastion_game_count, quick_bastion_playtime, quick_symmetra_kill, quick_symmetra_death, quick_symmetra_win, quick_symmetra_game_count, quick_symmetra_playtime, quick_zenyatta_kill, quick_zenyatta_death, quick_zenyatta_win, quick_zenyatta_game_count, quick_zenyatta_playtime, quick_genji_kill, quick_genji_death, quick_genji_win, quick_genji_game_count, quick_genji_playtime, quick_roadhog_kill, quick_roadhog_death, quick_roadhog_win, quick_roadhog_game_count, quick_roadhog_playtime, quick_mccree_kill, quick_mccree_death, quick_mccree_win, quick_mccree_game_count, quick_mccree_playtime, quick_junkrat_kill, quick_junkrat_death, quick_junkrat_win, quick_junkrat_game_count, quick_junkrat_playtime, quick_zarya_kill, quick_zarya_death, quick_zarya_win, quick_zarya_game_count, quick_zarya_playtime, quick_soldier_kill, quick_soldier_death, quick_soldier_win, quick_soldier_game_count, quick_soldier_playtime, quick_lucio_kill, quick_lucio_death, quick_lucio_win, quick_lucio_game_count, quick_lucio_playtime, quick_dva_kill, quick_dva_death, quick_dva_win, quick_dva_game_count, quick_dva_playtime, quick_mei_kill, quick_mei_death, quick_mei_win, quick_mei_game_count, quick_mei_playtime, quick_ana_kill, quick_ana_death, quick_ana_win, quick_ana_game_count, quick_ana_playtime FROM users WHERE name=? and battletag=? LIMIT 1;', [ name, battletag ], function(err, data, field){
-					   			res.json({ "responseCode": responseCode.GET_USERINFO_SUCCESS, "userData": data[0] });
-					   			return;
-					   		})
-						}
+				game_data.users["level"] = parseInt(level_div[0].children[0].data);
+				game_data.users["overwatch_id"] = overwatch_id;
+				game_data.users["name"] = name;
+				game_data.users["battletag"] = battletag;
+				fs.writeFile('game_data.txt', JSON.stringify(game_data, null, ' '), function(err){
+					if(err) console.log(err);
+					console.log("file saved");
+				})
+				
+					
+					/*	connection.query(insert_user, [game_data.users, game_data.reaper, game_data.tracer], function(err, result){
+							if(!err) 
+							{
+								if(is_rank) 
+								{
+									connection.query('SELECT user_id, name, battletag, level, rank_melee_lastshot, rank_solo_kill, rank_mission_kill, rank_lastshot, rank_deal, rank_kill, rank_environment_kill, rank_onecombo, rank_heal, rank_view_support, rank_destroy_teleport, rank_most_kill, rank_most_lastshot, rank_most_deal, rank_most_heal, rank_best_defence_support, rank_best_attack_support, rank_most_mission_kill, rank_most_mission_time, rank_most_onecombo, rank_most_solo_kill, rank_most_flood_time, rank_death, rank_environment_death, rank_card, rank_gold_medal, rank_silver_medal, rank_bronze_medal, rank_win, rank_game_count, rank_flood_time, rank_mission_time, rank_playtime, rank_most_melee_lastshot, rank_defence_support, rank_attack_support, rank_reaper_kill, rank_reaper_death, rank_reaper_win, rank_reaper_game_count, rank_reaper_playtime, rank_tracer_kill, rank_tracer_death, rank_tracer_win, rank_tracer_game_count, rank_tracer_playtime, rank_mercy_kill, rank_mercy_death, rank_mercy_win, rank_mercy_game_count, rank_mercy_playtime, rank_hanzo_kill,rank_hanzo_death,rank_hanzo_win,rank_hanzo_game_count,rank_hanzo_playtime,rank_torbjon_kill, rank_torbjon_death, rank_torbjon_win, rank_torbjon_game_count, rank_torbjon_playtime, rank_reinhardt_kill, rank_reinhardt_death, rank_reinhardt_win, rank_reinhardt_game_count, rank_reinhardt_playtime, rank_pharah_kill, rank_pharah_death, rank_pharah_win, rank_pharah_game_count, rank_pharah_playtime, rank_winston_kill, rank_winston_death, rank_winston_win, rank_winston_game_count, rank_winston_playtime, rank_widowmaker_kill, rank_widowmaker_death, rank_widowmaker_win, rank_widowmaker_game_count, rank_widowmaker_playtime, rank_bastion_kill, rank_bastion_death, rank_bastion_win, rank_bastion_game_count, rank_bastion_playtime, rank_symmetra_kill, rank_symmetra_death, rank_symmetra_win, rank_symmetra_game_count, rank_symmetra_playtime, rank_zenyatta_kill, rank_zenyatta_death, rank_zenyatta_win, rank_zenyatta_game_count, rank_zenyatta_playtime, rank_genji_kill, rank_genji_death, rank_genji_win, rank_genji_game_count, rank_genji_playtime, rank_roadhog_kill, rank_roadhog_death, rank_roadhog_win, rank_roadhog_game_count, rank_roadhog_playtime, rank_mccree_kill, rank_mccree_death, rank_mccree_win, rank_mccree_game_count, rank_mccree_playtime, rank_junkrat_kill, rank_junkrat_death, rank_junkrat_win, rank_junkrat_game_count, rank_junkrat_playtime, rank_zarya_kill, rank_zarya_death, rank_zarya_win, rank_zarya_game_count, rank_zarya_playtime, rank_soldier_kill, rank_soldier_death, rank_soldier_win, rank_soldier_game_count, rank_soldier_playtime, rank_lucio_kill, rank_lucio_death, rank_lucio_win, rank_lucio_game_count, rank_lucio_playtime, rank_dva_kill, rank_dva_death, rank_dva_win, rank_dva_game_count, rank_dva_playtime, rank_mei_kill, rank_mei_death, rank_mei_win, rank_mei_game_count, rank_mei_playtime, rank_ana_kill, rank_ana_death, rank_ana_win, rank_ana_game_count, rank_ana_playtime FROM users WHERE name=? and battletag=? LIMIT 1;', [ name, battletag ], function(err, data, field){
+										res.json({ "responseCode": responseCode.GET_USERINFO_SUCCESS, "userData": data[0] });
+										return;
+								 	})
+								}
+								else 
+								{
+									connection.query('SELECT user_id, name, battletag, level, quick_melee_lastshot, quick_solo_kill, quick_mission_kill, quick_lastshot, quick_deal, quick_kill, quick_environment_kill, quick_onecombo, quick_heal, quick_view_support, quick_destroy_teleport, quick_most_kill, quick_most_lastshot, quick_most_deal, quick_most_heal, quick_best_defence_support, quick_best_attack_support, quick_most_mission_kill, quick_most_mission_time, quick_most_onecombo, quick_most_solo_kill, quick_most_flood_time, quick_death, quick_environment_death, quick_card, quick_gold_medal, quick_silver_medal, quick_bronze_medal, quick_win, quick_game_count, quick_flood_time, quick_mission_time, quick_playtime, quick_most_melee_lastshot, quick_defence_support, quick_attack_support, quick_reaper_kill, quick_reaper_death, quick_reaper_win, quick_reaper_game_count, quick_reaper_playtime, quick_tracer_kill, quick_tracer_death, quick_tracer_win, quick_tracer_game_count, quick_tracer_playtime, quick_mercy_kill, quick_mercy_death, quick_mercy_win, quick_mercy_game_count, quick_mercy_playtime, quick_hanzo_kill,quick_hanzo_death,quick_hanzo_win,quick_hanzo_game_count,quick_hanzo_playtime,quick_torbjon_kill, quick_torbjon_death, quick_torbjon_win, quick_torbjon_game_count, quick_torbjon_playtime, quick_reinhardt_kill, quick_reinhardt_death, quick_reinhardt_win, quick_reinhardt_game_count, quick_reinhardt_playtime, quick_pharah_kill, quick_pharah_death, quick_pharah_win, quick_pharah_game_count, quick_pharah_playtime, quick_winston_kill, quick_winston_death, quick_winston_win, quick_winston_game_count, quick_winston_playtime, quick_widowmaker_kill, quick_widowmaker_death, quick_widowmaker_win, quick_widowmaker_game_count, quick_widowmaker_playtime, quick_bastion_kill, quick_bastion_death, quick_bastion_win, quick_bastion_game_count, quick_bastion_playtime, quick_symmetra_kill, quick_symmetra_death, quick_symmetra_win, quick_symmetra_game_count, quick_symmetra_playtime, quick_zenyatta_kill, quick_zenyatta_death, quick_zenyatta_win, quick_zenyatta_game_count, quick_zenyatta_playtime, quick_genji_kill, quick_genji_death, quick_genji_win, quick_genji_game_count, quick_genji_playtime, quick_roadhog_kill, quick_roadhog_death, quick_roadhog_win, quick_roadhog_game_count, quick_roadhog_playtime, quick_mccree_kill, quick_mccree_death, quick_mccree_win, quick_mccree_game_count, quick_mccree_playtime, quick_junkrat_kill, quick_junkrat_death, quick_junkrat_win, quick_junkrat_game_count, quick_junkrat_playtime, quick_zarya_kill, quick_zarya_death, quick_zarya_win, quick_zarya_game_count, quick_zarya_playtime, quick_soldier_kill, quick_soldier_death, quick_soldier_win, quick_soldier_game_count, quick_soldier_playtime, quick_lucio_kill, quick_lucio_death, quick_lucio_win, quick_lucio_game_count, quick_lucio_playtime, quick_dva_kill, quick_dva_death, quick_dva_win, quick_dva_game_count, quick_dva_playtime, quick_mei_kill, quick_mei_death, quick_mei_win, quick_mei_game_count, quick_mei_playtime, quick_ana_kill, quick_ana_death, quick_ana_win, quick_ana_game_count, quick_ana_playtime FROM users WHERE name=? and battletag=? LIMIT 1;', [ name, battletag ], function(err, data, field){
+									   	res.json({ "responseCode": responseCode.GET_USERINFO_SUCCESS, "userData": data[0] });
+									   	return;
+									})
+								}	
+							}
+							else 
+							{
+								console.log(err);
+								res.json({ "responseCode": responseCode.GET_USERINFO_FAIL });
+								return;
+							}
+						});
+					*/
+				connection.query("SELECT 1 FROM users WHERE EXISTS (SELECT 1 FROM users WHERE overwatch_id = ?) LIMIT 1;", [game_data.users.overwatch_id], function(err,data){
+					if(err) console.log(err);
+					if(data.length)
+					{
+						/*-------- 닉네임과 배틀태그가 바뀐것  ----------*/
+						connection.query("UPDATE users SET ?", [game_data.users], function(err, data){
+							if(err) console.log(err);
+
+							if(is_rank) 
+							{
+								connection.query('SELECT user_id, name, battletag, level, rank_melee_lastshot, rank_solo_kill, rank_mission_kill, rank_lastshot, rank_deal, rank_kill, rank_environment_kill, rank_onecombo, rank_heal, rank_view_support, rank_destroy_teleport, rank_most_kill, rank_most_lastshot, rank_most_deal, rank_most_heal, rank_best_defence_support, rank_best_attack_support, rank_most_mission_kill, rank_most_mission_time, rank_most_onecombo, rank_most_solo_kill, rank_most_flood_time, rank_death, rank_environment_death, rank_card, rank_gold_medal, rank_silver_medal, rank_bronze_medal, rank_win, rank_game_count, rank_flood_time, rank_mission_time, rank_playtime, rank_most_melee_lastshot, rank_defence_support, rank_attack_support, rank_reaper_kill, rank_reaper_death, rank_reaper_win, rank_reaper_game_count, rank_reaper_playtime, rank_tracer_kill, rank_tracer_death, rank_tracer_win, rank_tracer_game_count, rank_tracer_playtime, rank_mercy_kill, rank_mercy_death, rank_mercy_win, rank_mercy_game_count, rank_mercy_playtime, rank_hanzo_kill,rank_hanzo_death,rank_hanzo_win,rank_hanzo_game_count,rank_hanzo_playtime,rank_torbjon_kill, rank_torbjon_death, rank_torbjon_win, rank_torbjon_game_count, rank_torbjon_playtime, rank_reinhardt_kill, rank_reinhardt_death, rank_reinhardt_win, rank_reinhardt_game_count, rank_reinhardt_playtime, rank_pharah_kill, rank_pharah_death, rank_pharah_win, rank_pharah_game_count, rank_pharah_playtime, rank_winston_kill, rank_winston_death, rank_winston_win, rank_winston_game_count, rank_winston_playtime, rank_widowmaker_kill, rank_widowmaker_death, rank_widowmaker_win, rank_widowmaker_game_count, rank_widowmaker_playtime, rank_bastion_kill, rank_bastion_death, rank_bastion_win, rank_bastion_game_count, rank_bastion_playtime, rank_symmetra_kill, rank_symmetra_death, rank_symmetra_win, rank_symmetra_game_count, rank_symmetra_playtime, rank_zenyatta_kill, rank_zenyatta_death, rank_zenyatta_win, rank_zenyatta_game_count, rank_zenyatta_playtime, rank_genji_kill, rank_genji_death, rank_genji_win, rank_genji_game_count, rank_genji_playtime, rank_roadhog_kill, rank_roadhog_death, rank_roadhog_win, rank_roadhog_game_count, rank_roadhog_playtime, rank_mccree_kill, rank_mccree_death, rank_mccree_win, rank_mccree_game_count, rank_mccree_playtime, rank_junkrat_kill, rank_junkrat_death, rank_junkrat_win, rank_junkrat_game_count, rank_junkrat_playtime, rank_zarya_kill, rank_zarya_death, rank_zarya_win, rank_zarya_game_count, rank_zarya_playtime, rank_soldier_kill, rank_soldier_death, rank_soldier_win, rank_soldier_game_count, rank_soldier_playtime, rank_lucio_kill, rank_lucio_death, rank_lucio_win, rank_lucio_game_count, rank_lucio_playtime, rank_dva_kill, rank_dva_death, rank_dva_win, rank_dva_game_count, rank_dva_playtime, rank_mei_kill, rank_mei_death, rank_mei_win, rank_mei_game_count, rank_mei_playtime, rank_ana_kill, rank_ana_death, rank_ana_win, rank_ana_game_count, rank_ana_playtime FROM users WHERE name=? and battletag=? LIMIT 1;', [ name, battletag ], function(err, data, field){
+									if(err) console.log(err);
+									res.json({ "responseCode": responseCode.GET_USERINFO_SUCCESS, "userData": data[0] });
+								})
+							}
+							else 
+							{
+								connection.query('SELECT user_id, name, battletag, level, quick_melee_lastshot, quick_solo_kill, quick_mission_kill, quick_lastshot, quick_deal, quick_kill, quick_environment_kill, quick_onecombo, quick_heal, quick_view_support, quick_destroy_teleport, quick_most_kill, quick_most_lastshot, quick_most_deal, quick_most_heal, quick_best_defence_support, quick_best_attack_support, quick_most_mission_kill, quick_most_mission_time, quick_most_onecombo, quick_most_solo_kill, quick_most_flood_time, quick_death, quick_environment_death, quick_card, quick_gold_medal, quick_silver_medal, quick_bronze_medal, quick_win, quick_game_count, quick_flood_time, quick_mission_time, quick_playtime, quick_most_melee_lastshot, quick_defence_support, quick_attack_support, quick_reaper_kill, quick_reaper_death, quick_reaper_win, quick_reaper_game_count, quick_reaper_playtime, quick_tracer_kill, quick_tracer_death, quick_tracer_win, quick_tracer_game_count, quick_tracer_playtime, quick_mercy_kill, quick_mercy_death, quick_mercy_win, quick_mercy_game_count, quick_mercy_playtime, quick_hanzo_kill,quick_hanzo_death,quick_hanzo_win,quick_hanzo_game_count,quick_hanzo_playtime,quick_torbjon_kill, quick_torbjon_death, quick_torbjon_win, quick_torbjon_game_count, quick_torbjon_playtime, quick_reinhardt_kill, quick_reinhardt_death, quick_reinhardt_win, quick_reinhardt_game_count, quick_reinhardt_playtime, quick_pharah_kill, quick_pharah_death, quick_pharah_win, quick_pharah_game_count, quick_pharah_playtime, quick_winston_kill, quick_winston_death, quick_winston_win, quick_winston_game_count, quick_winston_playtime, quick_widowmaker_kill, quick_widowmaker_death, quick_widowmaker_win, quick_widowmaker_game_count, quick_widowmaker_playtime, quick_bastion_kill, quick_bastion_death, quick_bastion_win, quick_bastion_game_count, quick_bastion_playtime, quick_symmetra_kill, quick_symmetra_death, quick_symmetra_win, quick_symmetra_game_count, quick_symmetra_playtime, quick_zenyatta_kill, quick_zenyatta_death, quick_zenyatta_win, quick_zenyatta_game_count, quick_zenyatta_playtime, quick_genji_kill, quick_genji_death, quick_genji_win, quick_genji_game_count, quick_genji_playtime, quick_roadhog_kill, quick_roadhog_death, quick_roadhog_win, quick_roadhog_game_count, quick_roadhog_playtime, quick_mccree_kill, quick_mccree_death, quick_mccree_win, quick_mccree_game_count, quick_mccree_playtime, quick_junkrat_kill, quick_junkrat_death, quick_junkrat_win, quick_junkrat_game_count, quick_junkrat_playtime, quick_zarya_kill, quick_zarya_death, quick_zarya_win, quick_zarya_game_count, quick_zarya_playtime, quick_soldier_kill, quick_soldier_death, quick_soldier_win, quick_soldier_game_count, quick_soldier_playtime, quick_lucio_kill, quick_lucio_death, quick_lucio_win, quick_lucio_game_count, quick_lucio_playtime, quick_dva_kill, quick_dva_death, quick_dva_win, quick_dva_game_count, quick_dva_playtime, quick_mei_kill, quick_mei_death, quick_mei_win, quick_mei_game_count, quick_mei_playtime, quick_ana_kill, quick_ana_death, quick_ana_win, quick_ana_game_count, quick_ana_playtime FROM users WHERE name=? and battletag=? LIMIT 1;', [ name, battletag ], function(err, data, field){
+									if(err) console.log(err);
+									res.json({ "responseCode": responseCode.GET_USERINFO_SUCCESS, "userData": data[0] });
+								})
+							}
+						})
 					}
-					else {
-						res.json({ "responseCode": responseCode.GET_USERINFO_FAIL });
-						return;
+					else 
+					{
+						connection.query("INSERT INTO users SET ?", [game_data.users], function(err, data){
+							if(err) console.log(err);
+							if(is_rank) 
+							{
+								connection.query('SELECT user_id, name, battletag, level, rank_melee_lastshot, rank_solo_kill, rank_mission_kill, rank_lastshot, rank_deal, rank_kill, rank_environment_kill, rank_onecombo, rank_heal, rank_view_support, rank_destroy_teleport, rank_most_kill, rank_most_lastshot, rank_most_deal, rank_most_heal, rank_best_defence_support, rank_best_attack_support, rank_most_mission_kill, rank_most_mission_time, rank_most_onecombo, rank_most_solo_kill, rank_most_flood_time, rank_death, rank_environment_death, rank_card, rank_gold_medal, rank_silver_medal, rank_bronze_medal, rank_win, rank_game_count, rank_flood_time, rank_mission_time, rank_playtime, rank_most_melee_lastshot, rank_defence_support, rank_attack_support, rank_reaper_kill, rank_reaper_death, rank_reaper_win, rank_reaper_game_count, rank_reaper_playtime, rank_tracer_kill, rank_tracer_death, rank_tracer_win, rank_tracer_game_count, rank_tracer_playtime, rank_mercy_kill, rank_mercy_death, rank_mercy_win, rank_mercy_game_count, rank_mercy_playtime, rank_hanzo_kill,rank_hanzo_death,rank_hanzo_win,rank_hanzo_game_count,rank_hanzo_playtime,rank_torbjon_kill, rank_torbjon_death, rank_torbjon_win, rank_torbjon_game_count, rank_torbjon_playtime, rank_reinhardt_kill, rank_reinhardt_death, rank_reinhardt_win, rank_reinhardt_game_count, rank_reinhardt_playtime, rank_pharah_kill, rank_pharah_death, rank_pharah_win, rank_pharah_game_count, rank_pharah_playtime, rank_winston_kill, rank_winston_death, rank_winston_win, rank_winston_game_count, rank_winston_playtime, rank_widowmaker_kill, rank_widowmaker_death, rank_widowmaker_win, rank_widowmaker_game_count, rank_widowmaker_playtime, rank_bastion_kill, rank_bastion_death, rank_bastion_win, rank_bastion_game_count, rank_bastion_playtime, rank_symmetra_kill, rank_symmetra_death, rank_symmetra_win, rank_symmetra_game_count, rank_symmetra_playtime, rank_zenyatta_kill, rank_zenyatta_death, rank_zenyatta_win, rank_zenyatta_game_count, rank_zenyatta_playtime, rank_genji_kill, rank_genji_death, rank_genji_win, rank_genji_game_count, rank_genji_playtime, rank_roadhog_kill, rank_roadhog_death, rank_roadhog_win, rank_roadhog_game_count, rank_roadhog_playtime, rank_mccree_kill, rank_mccree_death, rank_mccree_win, rank_mccree_game_count, rank_mccree_playtime, rank_junkrat_kill, rank_junkrat_death, rank_junkrat_win, rank_junkrat_game_count, rank_junkrat_playtime, rank_zarya_kill, rank_zarya_death, rank_zarya_win, rank_zarya_game_count, rank_zarya_playtime, rank_soldier_kill, rank_soldier_death, rank_soldier_win, rank_soldier_game_count, rank_soldier_playtime, rank_lucio_kill, rank_lucio_death, rank_lucio_win, rank_lucio_game_count, rank_lucio_playtime, rank_dva_kill, rank_dva_death, rank_dva_win, rank_dva_game_count, rank_dva_playtime, rank_mei_kill, rank_mei_death, rank_mei_win, rank_mei_game_count, rank_mei_playtime, rank_ana_kill, rank_ana_death, rank_ana_win, rank_ana_game_count, rank_ana_playtime FROM users WHERE name=? and battletag=? LIMIT 1;', [ name, battletag ], function(err, data, field){
+									if(err) console.log(err);
+									res.json({ "responseCode": responseCode.GET_USERINFO_SUCCESS, "userData": data[0] });
+								})
+							}
+							else 
+							{
+								connection.query('SELECT user_id, name, battletag, level, quick_melee_lastshot, quick_solo_kill, quick_mission_kill, quick_lastshot, quick_deal, quick_kill, quick_environment_kill, quick_onecombo, quick_heal, quick_view_support, quick_destroy_teleport, quick_most_kill, quick_most_lastshot, quick_most_deal, quick_most_heal, quick_best_defence_support, quick_best_attack_support, quick_most_mission_kill, quick_most_mission_time, quick_most_onecombo, quick_most_solo_kill, quick_most_flood_time, quick_death, quick_environment_death, quick_card, quick_gold_medal, quick_silver_medal, quick_bronze_medal, quick_win, quick_game_count, quick_flood_time, quick_mission_time, quick_playtime, quick_most_melee_lastshot, quick_defence_support, quick_attack_support, quick_reaper_kill, quick_reaper_death, quick_reaper_win, quick_reaper_game_count, quick_reaper_playtime, quick_tracer_kill, quick_tracer_death, quick_tracer_win, quick_tracer_game_count, quick_tracer_playtime, quick_mercy_kill, quick_mercy_death, quick_mercy_win, quick_mercy_game_count, quick_mercy_playtime, quick_hanzo_kill,quick_hanzo_death,quick_hanzo_win,quick_hanzo_game_count,quick_hanzo_playtime,quick_torbjon_kill, quick_torbjon_death, quick_torbjon_win, quick_torbjon_game_count, quick_torbjon_playtime, quick_reinhardt_kill, quick_reinhardt_death, quick_reinhardt_win, quick_reinhardt_game_count, quick_reinhardt_playtime, quick_pharah_kill, quick_pharah_death, quick_pharah_win, quick_pharah_game_count, quick_pharah_playtime, quick_winston_kill, quick_winston_death, quick_winston_win, quick_winston_game_count, quick_winston_playtime, quick_widowmaker_kill, quick_widowmaker_death, quick_widowmaker_win, quick_widowmaker_game_count, quick_widowmaker_playtime, quick_bastion_kill, quick_bastion_death, quick_bastion_win, quick_bastion_game_count, quick_bastion_playtime, quick_symmetra_kill, quick_symmetra_death, quick_symmetra_win, quick_symmetra_game_count, quick_symmetra_playtime, quick_zenyatta_kill, quick_zenyatta_death, quick_zenyatta_win, quick_zenyatta_game_count, quick_zenyatta_playtime, quick_genji_kill, quick_genji_death, quick_genji_win, quick_genji_game_count, quick_genji_playtime, quick_roadhog_kill, quick_roadhog_death, quick_roadhog_win, quick_roadhog_game_count, quick_roadhog_playtime, quick_mccree_kill, quick_mccree_death, quick_mccree_win, quick_mccree_game_count, quick_mccree_playtime, quick_junkrat_kill, quick_junkrat_death, quick_junkrat_win, quick_junkrat_game_count, quick_junkrat_playtime, quick_zarya_kill, quick_zarya_death, quick_zarya_win, quick_zarya_game_count, quick_zarya_playtime, quick_soldier_kill, quick_soldier_death, quick_soldier_win, quick_soldier_game_count, quick_soldier_playtime, quick_lucio_kill, quick_lucio_death, quick_lucio_win, quick_lucio_game_count, quick_lucio_playtime, quick_dva_kill, quick_dva_death, quick_dva_win, quick_dva_game_count, quick_dva_playtime, quick_mei_kill, quick_mei_death, quick_mei_win, quick_mei_game_count, quick_mei_playtime, quick_ana_kill, quick_ana_death, quick_ana_win, quick_ana_game_count, quick_ana_playtime FROM users WHERE name=? and battletag=? LIMIT 1;', [ name, battletag ], function(err, data, field){
+									if(err) console.log(err);
+									res.json({ "responseCode": responseCode.GET_USERINFO_SUCCESS, "userData": data[0] });
+								})
+							}
+						})
 					}
-				});
+				})
+
+					for(var i=1; i<Object.keys(game_data).length; i++)
+					{	
+						(function(i){
+							connection.query("SELECT 1 FROM " + Object.keys(game_data)[i] + " WHERE EXISTS (SELECT 1 FROM " + Object.keys(game_data)[i] + " WHERE overwatch_id=?) LIMIT 1;", [overwatch_id], function(err,data){
+								if(err) console.log(err);
+								if(data.length)
+								{
+									//이미 데이터가 있음
+									connection.query("UPDATE " + Object.keys(game_data)[i] + " SET ?;", [ game_data[Object.keys(game_data)[i]] ], function(err, data){
+										if(err) console.log(err);
+									});
+								}
+								else
+								{
+									//데이터 없음
+									connection.query("INSERT INTO " + Object.keys(game_data)[i] + " SET ?;", [ game_data[Object.keys(game_data)[i]] ], function(err, data){
+										if(err) console.log(err);
+									});
+								}
+							});		
+						})(i);	
+					}
+
+
+				
 			});
 		}
 	});
 }
 
 exports.test = function(req, res) {
-	res.end(process.env.MYSQL_PASSWORD);
+	res.end();
 }
